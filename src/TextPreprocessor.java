@@ -1,5 +1,6 @@
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Scanner;
 
@@ -15,7 +16,6 @@ public class TextPreprocessor {
 
         String filePath;
         if (choice == 1) {
-            // 注意：文件名包含空格，需要完整匹配，且要补全 .txt 后缀
             filePath = "text/Cursed Be The Treasure.txt";
         } else if (choice == 2) {
             filePath = "text/Easy Test.txt";
@@ -44,7 +44,15 @@ public class TextPreprocessor {
         }
 
         String result = cleanedText.toString().trim().replaceAll("\\s+", " ");
-        System.out.println("\n清洗后的文本:");
-        System.out.println(result);
+
+        // 写入文件
+        String outputPath = "text/temp.txt";
+        try (FileWriter writer = new FileWriter(outputPath)) {
+            writer.write(result);
+            System.out.println("\n处理完成，已写入文件：" + outputPath);
+        } catch (IOException e) {
+            System.err.println("写入文件时发生错误: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
