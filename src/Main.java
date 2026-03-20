@@ -1,4 +1,5 @@
 import javax.swing.*;
+import javax.swing.text.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.*;
@@ -8,25 +9,33 @@ import javax.imageio.ImageIO;
 
 public class Main {
     private static Map<String, Map<String, Integer>> graph = new HashMap<>();
-    private static JTextArea resultArea;
-    private static JLabel imageLabel;       // 图片放在结果区域里
-    private static JPanel centerPanel;      // 中间统一容器
+    private static JTextPane resultArea;
+    private static JLabel imageLabel;
+    private static JPanel centerPanel;
+    private static Random random = new Random();
+    private static SimpleAttributeSet redAttr;
 
     public static void main(String[] args) {
+        redAttr = new SimpleAttributeSet();
+        StyleConstants.setForeground(redAttr, Color.RED);
+
         JFrame frame = new JFrame("Lab1");
         frame.setSize(950, 700);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setLayout(new BorderLayout(10, 10));
-        frame.setExtendedState(JFrame.MAXIMIZED_BOTH); // 自动全屏
+        frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
 
-        // ========== 顶部按钮 ==========
         JPanel panel = new JPanel();
         panel.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 10));
         JButton btnLoadGen = new JButton("1. 加载文本并生成有向图");
         JButton btnShowGraph = new JButton("2. 展示有向图");
         JButton btnQuery = new JButton("3. 查询桥接词");
-        JTextField word1Field = new JTextField(8);
-        JTextField word2Field = new JTextField(8);
+        JButton btnGenerate = new JButton("4. 生成新文本");
+
+        JTextField word1Field = new JTextField(6);
+        JTextField word2Field = new JTextField(6);
+        JTextField newTextField = new JTextField(30);
+
         panel.add(btnLoadGen);
         panel.add(btnShowGraph);
         panel.add(new JLabel("单词1:"));
@@ -34,11 +43,13 @@ public class Main {
         panel.add(new JLabel("单词2:"));
         panel.add(word2Field);
         panel.add(btnQuery);
+        panel.add(new JLabel("新文本:"));
+        panel.add(newTextField);
+        panel.add(btnGenerate);
 
-        // ========== 中间区域：结果 + 图片 二合一 ==========
         centerPanel = new JPanel();
         centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
-        resultArea = new JTextArea(8, 0);
+        resultArea = new JTextPane();
         resultArea.setEditable(false);
         JScrollPane scrollPane = new JScrollPane(resultArea);
 
@@ -49,29 +60,22 @@ public class Main {
         centerPanel.add(scrollPane);
         centerPanel.add(imageScroll);
 
-        // ========== 组装窗口 ==========
         frame.add(panel, BorderLayout.NORTH);
         frame.add(centerPanel, BorderLayout.CENTER);
 
-        // ======================
-        // 功能1
-        // ======================
         btnLoadGen.addActionListener(e -> {
             JFileChooser chooser = new JFileChooser("text");
             if (chooser.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION) {
                 File file = chooser.getSelectedFile();
                 processFile(file.getAbsolutePath());
-                resultArea.append("✅ 已加载：" + file.getName() + "，有向图已生成！\n");
+                appendResult("✅ 已加载：" + file.getName() + "，有向图已生成！\n", Color.BLACK);
             }
         });
 
-        // ======================
-        // 功能2：展示有向图（显示在结果区）
-        // ======================
         btnShowGraph.addActionListener(e -> {
             File imgFile = new File("graph/graph.png");
             if (!imgFile.exists()) {
-                resultArea.append("❌ 请先执行功能1！\n");
+                appendResult("❌ 请先执行功能1！\n", Color.RED);
                 return;
             }
             try {
@@ -80,32 +84,80 @@ public class Main {
                 int h = Math.min(img.getHeight(), 400);
                 Image scaled = img.getScaledInstance(w, h, Image.SCALE_SMOOTH);
                 imageLabel.setIcon(new ImageIcon(scaled));
-                resultArea.append("✅ 有向图已显示在结果区域！\n");
+                appendResult("✅ 有向图已显示在结果区域！\n", Color.BLACK);
             } catch (Exception ex) {
-                resultArea.append("❌ 图片加载失败！\n");
+                appendResult("❌ 图片加载失败！\n", Color.RED);
             }
         });
 
-        // ======================
-        // 功能3
-        // ======================
         btnQuery.addActionListener(e -> {
             String w1 = word1Field.getText().trim();
             String w2 = word2Field.getText().trim();
             if (w1.isEmpty() || w2.isEmpty()) {
-                resultArea.append("❌ 请输入两个单词！\n");
+                appendResult("❌ 请输入两个单词！\n", Color.RED);
                 return;
             }
             String res = queryBridgeWords(w1, w2);
-            resultArea.append("🔍 " + res + "\n");
+            appendResult("🔍 " + res + "\n", Color.BLACK);
+        });
+
+        btnGenerate.addActionListener(e -> {
+            String inputText = newTextField.getText().trim();
+            if (inputText.isEmpty()) {
+                appendResult("❌ 请输入新文本！\n", Color.RED);
+                return;
+            }
+            if (graph.isEmpty()) {
+                appendResult("❌ 请先执行功能1！\n", Color.RED);
+                return;
+            }
+            appendResult("📝 生成新文本：", Color.BLACK);
+            generateNewTextWithColor(inputText);
         });
 
         frame.setVisible(true);
     }
 
-    // ======================
-    // 以下是你的原有逻辑，完全不动
-    // ======================
+    private static void appendResult(String text, Color color) {
+        SimpleAttributeSet attr = new SimpleAttributeSet();
+        StyleConstants.setForeground(attr, color);
+        try {
+            resultArea.getDocument().insertString(resultArea.getDocument().getLength(), text, attr);
+        } catch (BadLocationException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void generateNewTextWithColor(String inputText) {
+        String cleaned = inputText.toLowerCase().replaceAll("[^a-z\\s]", "");
+        String[] words = cleaned.split("\\s+");
+        if (words.length <= 1) {
+            appendResult(inputText + "\n", Color.BLACK);
+            return;
+        }
+
+        try {
+            Document doc = resultArea.getDocument();
+            doc.insertString(doc.getLength(), words[0], null);
+
+            for (int i = 0; i < words.length - 1; i++) {
+                String w1 = words[i];
+                String w2 = words[i + 1];
+                java.util.List<String> bridges = getBridgeWords(w1, w2);
+
+                if (!bridges.isEmpty()) {
+                    String bridge = bridges.get(random.nextInt(bridges.size()));
+                    doc.insertString(doc.getLength(), " ", null);
+                    doc.insertString(doc.getLength(), bridge, redAttr);
+                }
+                doc.insertString(doc.getLength(), " " + w2, null);
+            }
+            doc.insertString(doc.getLength(), "\n", null);
+        } catch (Exception e) {
+            appendResult("❌ 生成失败\n", Color.RED);
+        }
+    }
+
     private static void processFile(String path) {
         try {
             StringBuilder sb = new StringBuilder();
@@ -113,28 +165,18 @@ public class Main {
                 int c;
                 while ((c = br.read()) != -1) {
                     char ch = (char) c;
-                    // 只保留字母，其他全部变成空格（真正的干净清理）
-                    if (Character.isLetter(ch)) {
-                        sb.append(Character.toLowerCase(ch));
-                    } else {
-                        sb.append(' ');
-                    }
+                    sb.append(Character.isLetter(ch) ? Character.toLowerCase(ch) : ' ');
                 }
             }
-
-            // 🔥 关键修复：把连续空格变成单个空格，并且确保不会丢失单词
             String text = sb.toString().trim().replaceAll("\\s+", " ");
-
-            // 写入temp.txt
             try (BufferedWriter bw = new BufferedWriter(new FileWriter("text/temp.txt"))) {
                 bw.write(text);
             }
-
             buildGraph(text);
             showDirectedGraph();
             Thread.sleep(800);
         } catch (Exception ex) {
-            resultArea.append("❌ 处理失败：" + ex.getMessage() + "\n");
+            appendResult("❌ 处理失败：" + ex.getMessage() + "\n", Color.RED);
         }
     }
 
@@ -162,16 +204,14 @@ public class Main {
             Process p = Runtime.getRuntime().exec("dot -Tpng graph/graph.dot -o graph/graph.png");
             p.waitFor();
         } catch (Exception e) {
-            resultArea.append("❌ 生成图失败：" + e.getMessage() + "\n");
+            appendResult("❌ 生成图失败：" + e.getMessage() + "\n", Color.RED);
         }
     }
 
     public static String queryBridgeWords(String word1, String word2) {
-        // 终极清洗：统一小写 + 只留字母
         word1 = word1.toLowerCase().replaceAll("[^a-z]", "");
         word2 = word2.toLowerCase().replaceAll("[^a-z]", "");
 
-        // 收集图里所有单词（包含终点词）
         java.util.Set<String> allWords = new java.util.HashSet<>();
         for (java.util.Map.Entry<String, Map<String, Integer>> entry : graph.entrySet()) {
             allWords.add(entry.getKey());
@@ -188,9 +228,7 @@ public class Main {
         if (!has2)
             return "No \"" + word2 + "\" in the graph!";
 
-        // 🔥 修复歧义：全部写完整名字 java.util.List
         java.util.List<String> bridges = new java.util.ArrayList<>();
-
         if (graph.containsKey(word1)) {
             for (String w3 : graph.get(word1).keySet()) {
                 if (graph.containsKey(w3) && graph.get(w3).containsKey(word2)) {
@@ -210,5 +248,20 @@ public class Main {
         }
         sb.append(".");
         return sb.toString();
+    }
+
+    private static java.util.List<String> getBridgeWords(String w1, String w2) {
+        w1 = w1.toLowerCase().replaceAll("[^a-z]", "");
+        w2 = w2.toLowerCase().replaceAll("[^a-z]", "");
+
+        java.util.List<String> bridges = new java.util.ArrayList<>();
+        if (graph.containsKey(w1)) {
+            for (String w3 : graph.get(w1).keySet()) {
+                if (graph.containsKey(w3) && graph.get(w3).containsKey(w2)) {
+                    bridges.add(w3);
+                }
+            }
+        }
+        return bridges;
     }
 }
