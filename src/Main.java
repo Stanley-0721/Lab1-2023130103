@@ -135,63 +135,11 @@ public class Main {
         frame.setVisible(true);
     }
 
-    // 你要求的函数：String generateNewText(String inputText)
-    private static String generateNewText(String inputText) {
-        String cleaned = inputText.toLowerCase().replaceAll("[^a-z\\s]", "");
-        String[] words = cleaned.split("\\s+");
-        if (words.length <= 1) return inputText;
+    // 你要求的标准函数：计算最短路径，返回字符串
+    private static String calcShortestPath(String word1, String word2) {
+        String start = word1.toLowerCase().replaceAll("[^a-z]", "");
+        String end = word2.toLowerCase().replaceAll("[^a-z]", "");
 
-        StringBuilder sb = new StringBuilder();
-        sb.append(words[0]);
-
-        for (int i = 0; i < words.length - 1; i++) {
-            String w1 = words[i];
-            String w2 = words[i + 1];
-            List<String> bridges = getBridgeWords(w1, w2);
-
-            if (!bridges.isEmpty()) {
-                String b = bridges.get(random.nextInt(bridges.size()));
-                sb.append(" ").append(b);
-            }
-            sb.append(" ").append(w2);
-        }
-        return sb.toString();
-    }
-
-    // 专门负责带红色显示
-    private static void displayGeneratedTextWithRed(String inputText) {
-        String cleaned = inputText.toLowerCase().replaceAll("[^a-z\\s]", "");
-        String[] words = cleaned.split("\\s+");
-        if (words.length <= 1) {
-            appendResult(inputText + "\n", Color.BLACK);
-            return;
-        }
-
-        try {
-            Document doc = resultArea.getDocument();
-            doc.insertString(doc.getLength(), words[0], null);
-
-            for (int i = 0; i < words.length - 1; i++) {
-                String w1 = words[i];
-                String w2 = words[i + 1];
-                List<String> bridges = getBridgeWords(w1, w2);
-
-                if (!bridges.isEmpty()) {
-                    String b = bridges.get(random.nextInt(bridges.size()));
-                    doc.insertString(doc.getLength(), " ", null);
-                    doc.insertString(doc.getLength(), b, redAttr);
-                }
-
-                doc.insertString(doc.getLength(), " " + w2, null);
-            }
-
-            doc.insertString(doc.getLength(), "\n", null);
-        } catch (Exception e) {
-            appendResult("❌ 生成失败\n", Color.RED);
-        }
-    }
-
-    private static void queryShortestPath(String start, String end) {
         Set<String> allWords = new HashSet<>();
         for (Map.Entry<String, Map<String, Integer>> entry : graph.entrySet()) {
             allWords.add(entry.getKey());
@@ -199,16 +147,13 @@ public class Main {
         }
 
         if (!allWords.contains(start)) {
-            appendResult("❌ 单词 \"" + start + "\" 不存在！\n", Color.RED);
-            return;
+            return "❌ 单词 \"" + start + "\" 不存在！";
         }
         if (!allWords.contains(end)) {
-            appendResult("❌ 单词 \"" + end + "\" 不存在！\n", Color.RED);
-            return;
+            return "❌ 单词 \"" + end + "\" 不存在！";
         }
         if (start.equals(end)) {
-            appendResult("❌ 起点和终点不能相同！\n", Color.RED);
-            return;
+            return "❌ 起点和终点不能相同！";
         }
 
         Map<String, Integer> dist = new HashMap<>();
@@ -233,8 +178,7 @@ public class Main {
         }
 
         if (dist.get(end) == -1) {
-            appendResult("📶 从 \"" + start + "\" 到 \"" + end + "\" 不可达！\n", Color.BLACK);
-            return;
+            return "📶 从 \"" + start + "\" 到 \"" + end + "\" 不可达！";
         }
 
         List<String> path = new ArrayList<>();
@@ -245,41 +189,59 @@ public class Main {
         }
         Collections.reverse(path);
 
-        appendResult("📶 最短路径（长度 " + (path.size()-1) + "）：", Color.BLACK);
-        try {
-            Document doc = resultArea.getDocument();
-            for (int i = 0; i < path.size(); i++) {
-                if (i > 0) doc.insertString(doc.getLength(), " → ", null);
-                doc.insertString(doc.getLength(), path.get(i), redAttr);
-            }
-            doc.insertString(doc.getLength(), "\n", null);
-        } catch (Exception e) {
-            appendResult("❌ 显示路径失败\n", Color.RED);
+        StringBuilder sb = new StringBuilder();
+        sb.append("📶 最短路径（长度 ").append(path.size() - 1).append("）：");
+        for (int i = 0; i < path.size(); i++) {
+            if (i > 0) sb.append(" → ");
+            sb.append(path.get(i));
         }
+        return sb.toString();
+    }
 
-        imageLabel.setIcon(null);
-        System.gc();
-        highlightShortestPath(path);
+    // 界面调用：显示结果 + 高亮图
+    private static void queryShortestPath(String start, String end) {
+        String result = calcShortestPath(start, end);
+        appendResult(result + "\n", Color.BLACK);
 
-        try {
-            File highlightFile = new File("graph/highlighted_graph.png");
-            BufferedImage img = ImageIO.read(highlightFile);
-            int w = Math.min(img.getWidth(), 1200);
-            int h = Math.min(img.getHeight(), 400);
-            Image scaled = img.getScaledInstance(w, h, Image.SCALE_SMOOTH);
-
+        if (result.contains("→")) {
+            List<String> path = extractPathFromString(result);
             imageLabel.setIcon(null);
-            imageLabel.setIcon(new ImageIcon(scaled));
-            imageLabel.repaint();
-            centerPanel.revalidate();
-            centerPanel.repaint();
+            System.gc();
+            highlightShortestPath(path);
 
-            appendResult("✅ 最短路径已高亮显示（旧路径已清除）！\n", Color.BLACK);
-        } catch (Exception e) {
-            appendResult("❌ 加载高亮图失败：" + e.getMessage() + "\n", Color.RED);
+            try {
+                File highlightFile = new File("graph/highlighted_graph.png");
+                BufferedImage img = ImageIO.read(highlightFile);
+                int w = Math.min(img.getWidth(), 1200);
+                int h = Math.min(img.getHeight(), 400);
+                Image scaled = img.getScaledInstance(w, h, Image.SCALE_SMOOTH);
+
+                imageLabel.setIcon(new ImageIcon(scaled));
+                imageLabel.repaint();
+                centerPanel.revalidate();
+                centerPanel.repaint();
+
+                appendResult("✅ 最短路径已高亮显示！\n", Color.BLACK);
+            } catch (Exception e) {
+                appendResult("❌ 加载高亮图失败：" + e.getMessage() + "\n", Color.RED);
+            }
         }
     }
 
+    // 从字符串结果中提取路径
+    private static List<String> extractPathFromString(String result) {
+        List<String> path = new ArrayList<>();
+        try {
+            String[] parts = result.split("：");
+            if (parts.length >= 2) {
+                String[] nodes = parts[1].split(" → ");
+                path.addAll(Arrays.asList(nodes));
+            }
+        } catch (Exception ignored) {}
+        return path;
+    }
+
+    // 高亮最短路径
     private static void highlightShortestPath(List<String> path) {
         try {
             File dir = new File("graph");
@@ -322,6 +284,63 @@ public class Main {
         }
     }
 
+    // 生成新文本
+    private static String generateNewText(String inputText) {
+        String cleaned = inputText.toLowerCase().replaceAll("[^a-z\\s]", "");
+        String[] words = cleaned.split("\\s+");
+        if (words.length <= 1) return inputText;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(words[0]);
+
+        for (int i = 0; i < words.length - 1; i++) {
+            String w1 = words[i];
+            String w2 = words[i + 1];
+            List<String> bridges = getBridgeWords(w1, w2);
+
+            if (!bridges.isEmpty()) {
+                String b = bridges.get(random.nextInt(bridges.size()));
+                sb.append(" ").append(b);
+            }
+            sb.append(" ").append(w2);
+        }
+        return sb.toString();
+    }
+
+    // 红色显示生成文本
+    private static void displayGeneratedTextWithRed(String inputText) {
+        String cleaned = inputText.toLowerCase().replaceAll("[^a-z\\s]", "");
+        String[] words = cleaned.split("\\s+");
+        if (words.length <= 1) {
+            appendResult(inputText + "\n", Color.BLACK);
+            return;
+        }
+
+        try {
+            Document doc = resultArea.getDocument();
+            doc.insertString(doc.getLength(), words[0], null);
+
+            for (int i = 0; i < words.length - 1; i++) {
+                String w1 = words[i];
+                String w2 = words[i + 1];
+                List<String> bridges = getBridgeWords(w1, w2);
+
+                if (!bridges.isEmpty()) {
+                    String b = bridges.get(random.nextInt(bridges.size()));
+                    doc.insertString(doc.getLength(), " ", null);
+                    doc.insertString(doc.getLength(), b, redAttr);
+                }
+
+                doc.insertString(doc.getLength(), " " + w2, null);
+            }
+
+            doc.insertString(doc.getLength(), "\n", null);
+        } catch (Exception e) {
+            appendResult("❌ 生成失败\n", Color.RED);
+        }
+    }
+
+    // 输出文本
     private static void appendResult(String text, Color color) {
         SimpleAttributeSet attr = new SimpleAttributeSet();
         StyleConstants.setForeground(attr, color);
@@ -332,6 +351,7 @@ public class Main {
         }
     }
 
+    // 读取文件并建图
     private static void processFile(String path) {
         try {
             StringBuilder sb = new StringBuilder();
@@ -343,9 +363,6 @@ public class Main {
                 }
             }
             String text = sb.toString().trim().replaceAll("\\s+", " ");
-            try (BufferedWriter bw = new BufferedWriter(new FileWriter("text/temp.txt"))) {
-                bw.write(text);
-            }
             buildGraph(text);
             showDirectedGraph();
             Thread.sleep(800);
@@ -354,6 +371,7 @@ public class Main {
         }
     }
 
+    // 建图
     private static void buildGraph(String text) {
         graph.clear();
         String[] words = text.split(" ");
@@ -363,6 +381,7 @@ public class Main {
         }
     }
 
+    // 展示有向图
     public static void showDirectedGraph() {
         try {
             File dir = new File("graph");
@@ -382,6 +401,7 @@ public class Main {
         }
     }
 
+    // 查询桥接词
     public static String queryBridgeWords(String word1, String word2) {
         word1 = word1.toLowerCase().replaceAll("[^a-z]", "");
         word2 = word2.toLowerCase().replaceAll("[^a-z]", "");
@@ -424,6 +444,7 @@ public class Main {
         return sb.toString();
     }
 
+    // 获取桥接词列表
     private static List<String> getBridgeWords(String w1, String w2) {
         w1 = w1.toLowerCase().replaceAll("[^a-z]", "");
         w2 = w2.toLowerCase().replaceAll("[^a-z]", "");
