@@ -192,13 +192,12 @@ public class Main {
         boolean has2 = graph.containsKey(word2);
 
         if (!has1 && !has2)
-            return "No " + word1 + " and " + word2 + " in the graph!";
+            return "No \"" + word1 + "\" and \"" + word2 + "\" in the graph!";
         if (!has1)
-            return "No " + word1 + " in the graph!";
+            return "No \"" + word1 + "\" in the graph!";
         if (!has2)
-            return "No " + word2 + " in the graph!";
+            return "No \"" + word2 + "\" in the graph!";
 
-        // 🔥 修复歧义：写成完整路径 java.util.List
         java.util.List<String> bridges = new java.util.ArrayList<>();
 
         for (String w3 : graph.get(word1).keySet()) {
@@ -208,13 +207,15 @@ public class Main {
         }
 
         if (bridges.isEmpty())
-            return "No bridge words from " + word1 + " to " + word2 + "!";
+            return "No bridge words from \"" + word1 + "\" to \"" + word2 + "\"!";
 
         StringBuilder sb = new StringBuilder();
-        sb.append("The bridge words from ").append(word1).append(" to ").append(word2).append(" are: ");
+        sb.append("The bridge words from \"").append(word1).append("\" to \"").append(word2).append("\" are: ");
+
         for (int i = 0; i < bridges.size(); i++) {
             if (i > 0) sb.append(", ");
-            sb.append(bridges.get(i));
+            // 给桥接词也加上双引号
+            sb.append("\"").append(bridges.get(i)).append("\"");
         }
         sb.append(".");
         return sb.toString();
