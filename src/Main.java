@@ -1,11 +1,11 @@
 import javax.swing.*;
 import javax.swing.text.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 import java.io.*;
 import java.util.*;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
+import java.util.List;
 
 public class Main {
     private static Map<String, Map<String, Integer>> graph = new HashMap<>();
@@ -31,6 +31,7 @@ public class Main {
         JButton btnShowGraph = new JButton("2. 展示有向图");
         JButton btnQuery = new JButton("3. 查询桥接词");
         JButton btnGenerate = new JButton("4. 生成新文本");
+        JButton btnShortestPath = new JButton("5. 查询最短路径");
 
         JTextField word1Field = new JTextField(6);
         JTextField word2Field = new JTextField(6);
@@ -43,9 +44,10 @@ public class Main {
         panel.add(new JLabel("单词2:"));
         panel.add(word2Field);
         panel.add(btnQuery);
+        panel.add(btnGenerate);
+        panel.add(btnShortestPath);
         panel.add(new JLabel("新文本:"));
         panel.add(newTextField);
-        panel.add(btnGenerate);
 
         centerPanel = new JPanel();
         centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
@@ -111,24 +113,53 @@ public class Main {
                 appendResult("❌ 请先执行功能1！\n", Color.RED);
                 return;
             }
-            appendResult("📝 生成新文本：", Color.BLACK);
-            generateNewTextWithColor(inputText);
+            appendResult("📝 生成新文本：\n", Color.BLACK);
+            displayGeneratedTextWithRed(inputText);
+        });
+
+        btnShortestPath.addActionListener(e -> {
+            String start = word1Field.getText().trim().toLowerCase().replaceAll("[^a-z]", "");
+            String end = word2Field.getText().trim().toLowerCase().replaceAll("[^a-z]", "");
+
+            if (start.isEmpty() || end.isEmpty()) {
+                appendResult("❌ 请输入两个单词！\n", Color.RED);
+                return;
+            }
+            if (graph.isEmpty()) {
+                appendResult("❌ 请先执行功能1！\n", Color.RED);
+                return;
+            }
+            queryShortestPath(start, end);
         });
 
         frame.setVisible(true);
     }
 
-    private static void appendResult(String text, Color color) {
-        SimpleAttributeSet attr = new SimpleAttributeSet();
-        StyleConstants.setForeground(attr, color);
-        try {
-            resultArea.getDocument().insertString(resultArea.getDocument().getLength(), text, attr);
-        } catch (BadLocationException e) {
-            e.printStackTrace();
+    // 你要求的函数：String generateNewText(String inputText)
+    private static String generateNewText(String inputText) {
+        String cleaned = inputText.toLowerCase().replaceAll("[^a-z\\s]", "");
+        String[] words = cleaned.split("\\s+");
+        if (words.length <= 1) return inputText;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(words[0]);
+
+        for (int i = 0; i < words.length - 1; i++) {
+            String w1 = words[i];
+            String w2 = words[i + 1];
+            List<String> bridges = getBridgeWords(w1, w2);
+
+            if (!bridges.isEmpty()) {
+                String b = bridges.get(random.nextInt(bridges.size()));
+                sb.append(" ").append(b);
+            }
+            sb.append(" ").append(w2);
         }
+        return sb.toString();
     }
 
-    private static void generateNewTextWithColor(String inputText) {
+    // 专门负责带红色显示
+    private static void displayGeneratedTextWithRed(String inputText) {
         String cleaned = inputText.toLowerCase().replaceAll("[^a-z\\s]", "");
         String[] words = cleaned.split("\\s+");
         if (words.length <= 1) {
@@ -143,18 +174,161 @@ public class Main {
             for (int i = 0; i < words.length - 1; i++) {
                 String w1 = words[i];
                 String w2 = words[i + 1];
-                java.util.List<String> bridges = getBridgeWords(w1, w2);
+                List<String> bridges = getBridgeWords(w1, w2);
 
                 if (!bridges.isEmpty()) {
-                    String bridge = bridges.get(random.nextInt(bridges.size()));
+                    String b = bridges.get(random.nextInt(bridges.size()));
                     doc.insertString(doc.getLength(), " ", null);
-                    doc.insertString(doc.getLength(), bridge, redAttr);
+                    doc.insertString(doc.getLength(), b, redAttr);
                 }
+
                 doc.insertString(doc.getLength(), " " + w2, null);
             }
+
             doc.insertString(doc.getLength(), "\n", null);
         } catch (Exception e) {
             appendResult("❌ 生成失败\n", Color.RED);
+        }
+    }
+
+    private static void queryShortestPath(String start, String end) {
+        Set<String> allWords = new HashSet<>();
+        for (Map.Entry<String, Map<String, Integer>> entry : graph.entrySet()) {
+            allWords.add(entry.getKey());
+            allWords.addAll(entry.getValue().keySet());
+        }
+
+        if (!allWords.contains(start)) {
+            appendResult("❌ 单词 \"" + start + "\" 不存在！\n", Color.RED);
+            return;
+        }
+        if (!allWords.contains(end)) {
+            appendResult("❌ 单词 \"" + end + "\" 不存在！\n", Color.RED);
+            return;
+        }
+        if (start.equals(end)) {
+            appendResult("❌ 起点和终点不能相同！\n", Color.RED);
+            return;
+        }
+
+        Map<String, Integer> dist = new HashMap<>();
+        Map<String, String> prev = new HashMap<>();
+        Queue<String> q = new LinkedList<>();
+
+        for (String w : allWords) dist.put(w, -1);
+        dist.put(start, 0);
+        q.add(start);
+
+        while (!q.isEmpty()) {
+            String u = q.poll();
+            if (u.equals(end)) break;
+            if (!graph.containsKey(u)) continue;
+            for (String v : graph.get(u).keySet()) {
+                if (dist.get(v) == -1) {
+                    dist.put(v, dist.get(u) + 1);
+                    prev.put(v, u);
+                    q.add(v);
+                }
+            }
+        }
+
+        if (dist.get(end) == -1) {
+            appendResult("📶 从 \"" + start + "\" 到 \"" + end + "\" 不可达！\n", Color.BLACK);
+            return;
+        }
+
+        List<String> path = new ArrayList<>();
+        String cur = end;
+        while (cur != null) {
+            path.add(cur);
+            cur = prev.get(cur);
+        }
+        Collections.reverse(path);
+
+        appendResult("📶 最短路径（长度 " + (path.size()-1) + "）：", Color.BLACK);
+        try {
+            Document doc = resultArea.getDocument();
+            for (int i = 0; i < path.size(); i++) {
+                if (i > 0) doc.insertString(doc.getLength(), " → ", null);
+                doc.insertString(doc.getLength(), path.get(i), redAttr);
+            }
+            doc.insertString(doc.getLength(), "\n", null);
+        } catch (Exception e) {
+            appendResult("❌ 显示路径失败\n", Color.RED);
+        }
+
+        imageLabel.setIcon(null);
+        System.gc();
+        highlightShortestPath(path);
+
+        try {
+            File highlightFile = new File("graph/highlighted_graph.png");
+            BufferedImage img = ImageIO.read(highlightFile);
+            int w = Math.min(img.getWidth(), 1200);
+            int h = Math.min(img.getHeight(), 400);
+            Image scaled = img.getScaledInstance(w, h, Image.SCALE_SMOOTH);
+
+            imageLabel.setIcon(null);
+            imageLabel.setIcon(new ImageIcon(scaled));
+            imageLabel.repaint();
+            centerPanel.revalidate();
+            centerPanel.repaint();
+
+            appendResult("✅ 最短路径已高亮显示（旧路径已清除）！\n", Color.BLACK);
+        } catch (Exception e) {
+            appendResult("❌ 加载高亮图失败：" + e.getMessage() + "\n", Color.RED);
+        }
+    }
+
+    private static void highlightShortestPath(List<String> path) {
+        try {
+            File dir = new File("graph");
+            if (!dir.exists()) dir.mkdirs();
+
+            Set<String> pathEdges = new HashSet<>();
+            for (int i = 0; i < path.size() - 1; i++) {
+                String f = path.get(i);
+                String t = path.get(i+1);
+                pathEdges.add(f + "->" + t);
+            }
+
+            StringBuilder dot = new StringBuilder();
+            dot.append("digraph G {\n");
+            dot.append("    rankdir=LR;\n");
+            dot.append("    node [shape=circle, style=filled, color=lightblue];\n");
+
+            for (String from : graph.keySet()) {
+                for (String to : graph.get(from).keySet()) {
+                    String edgeKey = from + "->" + to;
+                    if (pathEdges.contains(edgeKey)) {
+                        dot.append("    \"" + from + "\" -> \"" + to + "\" [label=\"" + graph.get(from).get(to) + "\", color=red, penwidth=3];\n");
+                    } else {
+                        dot.append("    \"" + from + "\" -> \"" + to + "\" [label=\"" + graph.get(from).get(to) + "\"];\n");
+                    }
+                }
+            }
+            dot.append("}\n");
+
+            File dotFile = new File("graph/highlighted_graph.dot");
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(dotFile))) {
+                writer.write(dot.toString());
+            }
+
+            Process process = Runtime.getRuntime().exec("dot -Tpng graph/highlighted_graph.dot -o graph/highlighted_graph.png");
+            process.waitFor();
+
+        } catch (Exception e) {
+            appendResult("❌ 生成高亮图失败：" + e.getMessage(), Color.RED);
+        }
+    }
+
+    private static void appendResult(String text, Color color) {
+        SimpleAttributeSet attr = new SimpleAttributeSet();
+        StyleConstants.setForeground(attr, color);
+        try {
+            resultArea.getDocument().insertString(resultArea.getDocument().getLength(), text, attr);
+        } catch (BadLocationException e) {
+            e.printStackTrace();
         }
     }
 
@@ -184,7 +358,7 @@ public class Main {
         graph.clear();
         String[] words = text.split(" ");
         for (int i = 0; i < words.length - 1; i++) {
-            String f = words[i], t = words[i + 1];
+            String f = words[i], t = words[i+1];
             graph.computeIfAbsent(f, k -> new HashMap<>()).put(t, graph.get(f).getOrDefault(t, 0) + 1);
         }
     }
@@ -212,8 +386,8 @@ public class Main {
         word1 = word1.toLowerCase().replaceAll("[^a-z]", "");
         word2 = word2.toLowerCase().replaceAll("[^a-z]", "");
 
-        java.util.Set<String> allWords = new java.util.HashSet<>();
-        for (java.util.Map.Entry<String, Map<String, Integer>> entry : graph.entrySet()) {
+        Set<String> allWords = new HashSet<>();
+        for (Map.Entry<String, Map<String, Integer>> entry : graph.entrySet()) {
             allWords.add(entry.getKey());
             allWords.addAll(entry.getValue().keySet());
         }
@@ -228,7 +402,7 @@ public class Main {
         if (!has2)
             return "No \"" + word2 + "\" in the graph!";
 
-        java.util.List<String> bridges = new java.util.ArrayList<>();
+        List<String> bridges = new ArrayList<>();
         if (graph.containsKey(word1)) {
             for (String w3 : graph.get(word1).keySet()) {
                 if (graph.containsKey(w3) && graph.get(w3).containsKey(word2)) {
@@ -241,7 +415,7 @@ public class Main {
             return "No bridge words from \"" + word1 + "\" to \"" + word2 + "\"!";
 
         StringBuilder sb = new StringBuilder();
-        sb.append("The bridge words from \"").append(word1).append("\" to \"").append(word2).append("\" are: ");
+        sb.append("The bridge words from \"" + word1 + "\" to \"" + word2 + "\" are: ");
         for (int i = 0; i < bridges.size(); i++) {
             if (i > 0) sb.append(", ");
             sb.append("\"").append(bridges.get(i)).append("\"");
@@ -250,11 +424,10 @@ public class Main {
         return sb.toString();
     }
 
-    private static java.util.List<String> getBridgeWords(String w1, String w2) {
+    private static List<String> getBridgeWords(String w1, String w2) {
         w1 = w1.toLowerCase().replaceAll("[^a-z]", "");
         w2 = w2.toLowerCase().replaceAll("[^a-z]", "");
-
-        java.util.List<String> bridges = new java.util.ArrayList<>();
+        List<String> bridges = new ArrayList<>();
         if (graph.containsKey(w1)) {
             for (String w3 : graph.get(w1).keySet()) {
                 if (graph.containsKey(w3) && graph.get(w3).containsKey(w2)) {
