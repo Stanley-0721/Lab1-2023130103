@@ -13,7 +13,7 @@ public class Main {
     private static JPanel centerPanel;      // 中间统一容器
 
     public static void main(String[] args) {
-        JFrame frame = new JFrame("单词有向图工具");
+        JFrame frame = new JFrame("Lab1");
         frame.setSize(950, 700);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setLayout(new BorderLayout(10, 10));
@@ -113,13 +113,23 @@ public class Main {
                 int c;
                 while ((c = br.read()) != -1) {
                     char ch = (char) c;
-                    sb.append(Character.isLetter(ch) ? Character.toLowerCase(ch) : ' ');
+                    // 只保留字母，其他全部变成空格（真正的干净清理）
+                    if (Character.isLetter(ch)) {
+                        sb.append(Character.toLowerCase(ch));
+                    } else {
+                        sb.append(' ');
+                    }
                 }
             }
-            String text = sb.toString().replaceAll("\\s+", " ").trim();
+
+            // 🔥 关键修复：把连续空格变成单个空格，并且确保不会丢失单词
+            String text = sb.toString().trim().replaceAll("\\s+", " ");
+
+            // 写入temp.txt
             try (BufferedWriter bw = new BufferedWriter(new FileWriter("text/temp.txt"))) {
                 bw.write(text);
             }
+
             buildGraph(text);
             showDirectedGraph();
             Thread.sleep(800);
@@ -157,24 +167,48 @@ public class Main {
     }
 
     public static String queryBridgeWords(String word1, String word2) {
-        word1 = word1.toLowerCase();
-        word2 = word2.toLowerCase();
-        boolean h1 = graph.containsKey(word1), h2 = graph.containsKey(word2);
-        if (!h1 && !h2) return "No \"" + word1 + "\" and \"" + word2 + "\" in the graph!";
-        if (!h1) return "No \"" + word1 + "\" in the graph!";
-        if (!h2) return "No \"" + word2 + "\" in the graph!";
+        // 终极清洗：统一小写 + 只留字母
+        word1 = word1.toLowerCase().replaceAll("[^a-z]", "");
+        word2 = word2.toLowerCase().replaceAll("[^a-z]", "");
 
+        // 收集图里所有单词（包含终点词）
+        java.util.Set<String> allWords = new java.util.HashSet<>();
+        for (java.util.Map.Entry<String, Map<String, Integer>> entry : graph.entrySet()) {
+            allWords.add(entry.getKey());
+            allWords.addAll(entry.getValue().keySet());
+        }
+
+        boolean has1 = allWords.contains(word1);
+        boolean has2 = allWords.contains(word2);
+
+        if (!has1 && !has2)
+            return "No \"" + word1 + "\" and \"" + word2 + "\" in the graph!";
+        if (!has1)
+            return "No \"" + word1 + "\" in the graph!";
+        if (!has2)
+            return "No \"" + word2 + "\" in the graph!";
+
+        // 🔥 修复歧义：全部写完整名字 java.util.List
         java.util.List<String> bridges = new java.util.ArrayList<>();
-        for (String w3 : graph.get(word1).keySet())
-            if (graph.containsKey(w3) && graph.get(w3).containsKey(word2))
-                bridges.add(w3);
 
-        if (bridges.isEmpty()) return "No bridge words from \"" + word1 + "\" to \"" + word2 + "\"!";
-        StringBuilder sb = new StringBuilder("The bridge words from \"" + word1 + "\" to \"" + word2 + "\" are: ");
+        if (graph.containsKey(word1)) {
+            for (String w3 : graph.get(word1).keySet()) {
+                if (graph.containsKey(w3) && graph.get(w3).containsKey(word2)) {
+                    bridges.add(w3);
+                }
+            }
+        }
+
+        if (bridges.isEmpty())
+            return "No bridge words from \"" + word1 + "\" to \"" + word2 + "\"!";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("The bridge words from \"").append(word1).append("\" to \"").append(word2).append("\" are: ");
         for (int i = 0; i < bridges.size(); i++) {
             if (i > 0) sb.append(", ");
             sb.append("\"").append(bridges.get(i)).append("\"");
         }
-        return sb.append(".").toString();
+        sb.append(".");
+        return sb.toString();
     }
 }
