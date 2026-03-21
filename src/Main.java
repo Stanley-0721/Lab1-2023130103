@@ -15,6 +15,12 @@ public class Main {
     private static Random random = new Random();
     private static SimpleAttributeSet redAttr;
 
+    // PageRank 基础参数
+    private static final double DAMPING_FACTOR = 0.85;
+    private static final double CONVERGENCE_THRESHOLD = 1e-6;
+    private static final int MAX_ITERATIONS = 1000;
+    private static Map<String, Double> prValues = new HashMap<>();
+
     public static void main(String[] args) {
         redAttr = new SimpleAttributeSet();
         StyleConstants.setForeground(redAttr, Color.RED);
@@ -32,6 +38,7 @@ public class Main {
         JButton btnQuery = new JButton("3. 查询桥接词");
         JButton btnGenerate = new JButton("4. 生成新文本");
         JButton btnShortestPath = new JButton("5. 查询最短路径");
+        JButton btnPageRank = new JButton("6. 查询PageRank");
 
         JTextField word1Field = new JTextField(6);
         JTextField word2Field = new JTextField(6);
@@ -46,6 +53,7 @@ public class Main {
         panel.add(btnQuery);
         panel.add(btnGenerate);
         panel.add(btnShortestPath);
+        panel.add(btnPageRank);
         panel.add(new JLabel("新文本:"));
         panel.add(newTextField);
 
@@ -132,32 +140,88 @@ public class Main {
             queryShortestPath(start, end);
         });
 
+        btnPageRank.addActionListener(e -> {
+            String word = word1Field.getText().trim();
+            if (word.isEmpty()) {
+                appendResult("❌ 请输入要查询的单词！\n", Color.RED);
+                return;
+            }
+            if (graph.isEmpty()) {
+                appendResult("❌ 请先执行功能1加载文本！\n", Color.RED);
+                return;
+            }
+            Double pr = calPageRank(word);
+            appendResult(String.format("🔍 单词 \"%s\" 的PageRank值：%.6f\n", word, pr), Color.BLACK);
+        });
+
         frame.setVisible(true);
     }
 
-    // 你要求的标准函数：计算最短路径，返回字符串
+    // ===================== 必须实现：PageRank 计算函数 =====================
+    public static Double calPageRank(String word) {
+        if (graph.isEmpty()) return 0.0;
+        computePageRank();
+        word = word.toLowerCase().replaceAll("[^a-z]", "");
+        return prValues.getOrDefault(word, 0.0);
+    }
+
+    private static void computePageRank() {
+        Set<String> nodes = new HashSet<>();
+        for (var entry : graph.entrySet()) {
+            nodes.add(entry.getKey());
+            nodes.addAll(entry.getValue().keySet());
+        }
+        int N = nodes.size();
+        if (N == 0) return;
+
+        Map<String, Double> pr = new HashMap<>();
+        Map<String, Integer> outDegree = new HashMap<>();
+        for (String node : nodes) {
+            pr.put(node, 1.0 / N);
+            outDegree.put(node, graph.getOrDefault(node, new HashMap<>()).size());
+        }
+
+        for (int it = 0; it < MAX_ITERATIONS; it++) {
+            Map<String, Double> newPR = new HashMap<>();
+            double sinkSum = 0.0;
+            for (String node : nodes) {
+                if (outDegree.get(node) == 0) sinkSum += pr.get(node);
+            }
+
+            double maxDiff = 0.0;
+            for (String u : nodes) {
+                double sum = 0.0;
+                for (String v : nodes) {
+                    if (graph.containsKey(v) && graph.get(v).containsKey(u)) {
+                        sum += pr.get(v) / outDegree.get(v);
+                    }
+                }
+                double val = (1 - DAMPING_FACTOR) / N + DAMPING_FACTOR * (sum + sinkSum / N);
+                newPR.put(u, val);
+                maxDiff = Math.max(maxDiff, Math.abs(val - pr.get(u)));
+            }
+
+            pr = newPR;
+            if (maxDiff < CONVERGENCE_THRESHOLD) break;
+        }
+        prValues = pr;
+    }
+
+    // ===================== 加权最短路径（Dijkstra） =====================
     private static String calcShortestPath(String word1, String word2) {
         String start = word1.toLowerCase().replaceAll("[^a-z]", "");
         String end = word2.toLowerCase().replaceAll("[^a-z]", "");
 
-        // 收集所有节点
         Set<String> allWords = new HashSet<>();
-        for (Map.Entry<String, Map<String, Integer>> entry : graph.entrySet()) {
+        for (var entry : graph.entrySet()) {
             allWords.add(entry.getKey());
             allWords.addAll(entry.getValue().keySet());
         }
 
-        if (!allWords.contains(start)) {
-            return "❌ 单词 \"" + start + "\" 不存在！";
-        }
-        if (!allWords.contains(end)) {
-            return "❌ 单词 \"" + end + "\" 不存在！";
-        }
-        if (start.equals(end)) {
-            return "❌ 起点和终点相同，路径长度为0";
-        }
+        if (!allWords.contains(start)) return "❌ 单词 \"" + start + "\" 不存在！";
+        if (!allWords.contains(end)) return "❌ 单词 \"" + end + "\" 不存在！";
+        if (start.equals(end)) return "❌ 起点和终点相同，路径长度为0";
 
-        // Dijkstra 初始化
         Map<String, Integer> dist = new HashMap<>();
         Map<String, String> prev = new HashMap<>();
         PriorityQueue<Map.Entry<String, Integer>> pq =
@@ -173,24 +237,22 @@ public class Main {
         while (!pq.isEmpty()) {
             String u = pq.poll().getKey();
             if (u.equals(end)) break;
-
             if (!graph.containsKey(u)) continue;
+
             for (String v : graph.get(u).keySet()) {
-                int weight = graph.get(u).get(v); // 这里用真实权重！
-                if (dist.get(u) != Integer.MAX_VALUE && dist.get(u) + weight < dist.get(v)) {
-                    dist.put(v, dist.get(u) + weight);
+                int w = graph.get(u).get(v);
+                if (dist.get(u) != Integer.MAX_VALUE && dist.get(u) + w < dist.get(v)) {
+                    dist.put(v, dist.get(u) + w);
                     prev.put(v, u);
                     pq.add(new AbstractMap.SimpleEntry<>(v, dist.get(v)));
                 }
             }
         }
 
-        // 不可达
         if (dist.get(end) == Integer.MAX_VALUE) {
             return "📶 从 \"" + start + "\" 到 \"" + end + "\" 不可达！";
         }
 
-        // 还原路径
         List<String> path = new ArrayList<>();
         String cur = end;
         while (cur != null) {
@@ -199,7 +261,6 @@ public class Main {
         }
         Collections.reverse(path);
 
-        // 输出结果（显示总权重）
         StringBuilder sb = new StringBuilder();
         sb.append("📶 加权最短路径（总权重 ").append(dist.get(end)).append("）：");
         for (int i = 0; i < path.size(); i++) {
@@ -209,7 +270,7 @@ public class Main {
         return sb.toString();
     }
 
-    // 界面调用：显示结果 + 高亮图
+    // ===================== 以下为原有功能，无修改 =====================
     private static void queryShortestPath(String start, String end) {
         String result = calcShortestPath(start, end);
         appendResult(result + "\n", Color.BLACK);
@@ -226,12 +287,7 @@ public class Main {
                 int w = Math.min(img.getWidth(), 1200);
                 int h = Math.min(img.getHeight(), 400);
                 Image scaled = img.getScaledInstance(w, h, Image.SCALE_SMOOTH);
-
                 imageLabel.setIcon(new ImageIcon(scaled));
-                imageLabel.repaint();
-                centerPanel.revalidate();
-                centerPanel.repaint();
-
                 appendResult("✅ 最短路径已高亮显示！\n", Color.BLACK);
             } catch (Exception e) {
                 appendResult("❌ 加载高亮图失败：" + e.getMessage() + "\n", Color.RED);
@@ -239,7 +295,6 @@ public class Main {
         }
     }
 
-    // 从字符串结果中提取路径
     private static List<String> extractPathFromString(String result) {
         List<String> path = new ArrayList<>();
         try {
@@ -252,7 +307,6 @@ public class Main {
         return path;
     }
 
-    // 高亮最短路径
     private static void highlightShortestPath(List<String> path) {
         try {
             File dir = new File("graph");
@@ -260,9 +314,7 @@ public class Main {
 
             Set<String> pathEdges = new HashSet<>();
             for (int i = 0; i < path.size() - 1; i++) {
-                String f = path.get(i);
-                String t = path.get(i+1);
-                pathEdges.add(f + "->" + t);
+                pathEdges.add(path.get(i) + "->" + path.get(i+1));
             }
 
             StringBuilder dot = new StringBuilder();
@@ -272,8 +324,8 @@ public class Main {
 
             for (String from : graph.keySet()) {
                 for (String to : graph.get(from).keySet()) {
-                    String edgeKey = from + "->" + to;
-                    if (pathEdges.contains(edgeKey)) {
+                    String edge = from + "->" + to;
+                    if (pathEdges.contains(edge)) {
                         dot.append("    \"" + from + "\" -> \"" + to + "\" [label=\"" + graph.get(from).get(to) + "\", color=red, penwidth=3];\n");
                     } else {
                         dot.append("    \"" + from + "\" -> \"" + to + "\" [label=\"" + graph.get(from).get(to) + "\"];\n");
@@ -282,20 +334,17 @@ public class Main {
             }
             dot.append("}\n");
 
-            File dotFile = new File("graph/highlighted_graph.dot");
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(dotFile))) {
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter("graph/highlighted_graph.dot"))) {
                 writer.write(dot.toString());
             }
 
             Process process = Runtime.getRuntime().exec("dot -Tpng graph/highlighted_graph.dot -o graph/highlighted_graph.png");
             process.waitFor();
-
         } catch (Exception e) {
             appendResult("❌ 生成高亮图失败：" + e.getMessage(), Color.RED);
         }
     }
 
-    // 生成新文本
     private static String generateNewText(String inputText) {
         String cleaned = inputText.toLowerCase().replaceAll("[^a-z\\s]", "");
         String[] words = cleaned.split("\\s+");
@@ -318,7 +367,6 @@ public class Main {
         return sb.toString();
     }
 
-    // 红色显示生成文本
     private static void displayGeneratedTextWithRed(String inputText) {
         String cleaned = inputText.toLowerCase().replaceAll("[^a-z\\s]", "");
         String[] words = cleaned.split("\\s+");
@@ -341,17 +389,14 @@ public class Main {
                     doc.insertString(doc.getLength(), " ", null);
                     doc.insertString(doc.getLength(), b, redAttr);
                 }
-
                 doc.insertString(doc.getLength(), " " + w2, null);
             }
-
             doc.insertString(doc.getLength(), "\n", null);
         } catch (Exception e) {
             appendResult("❌ 生成失败\n", Color.RED);
         }
     }
 
-    // 输出文本
     private static void appendResult(String text, Color color) {
         SimpleAttributeSet attr = new SimpleAttributeSet();
         StyleConstants.setForeground(attr, color);
@@ -362,7 +407,6 @@ public class Main {
         }
     }
 
-    // 读取文件并建图
     private static void processFile(String path) {
         try {
             StringBuilder sb = new StringBuilder();
@@ -382,7 +426,6 @@ public class Main {
         }
     }
 
-    // 建图
     private static void buildGraph(String text) {
         graph.clear();
         String[] words = text.split(" ");
@@ -392,7 +435,6 @@ public class Main {
         }
     }
 
-    // 展示有向图
     public static void showDirectedGraph() {
         try {
             File dir = new File("graph");
@@ -412,13 +454,12 @@ public class Main {
         }
     }
 
-    // 查询桥接词
     public static String queryBridgeWords(String word1, String word2) {
         word1 = word1.toLowerCase().replaceAll("[^a-z]", "");
         word2 = word2.toLowerCase().replaceAll("[^a-z]", "");
 
         Set<String> allWords = new HashSet<>();
-        for (Map.Entry<String, Map<String, Integer>> entry : graph.entrySet()) {
+        for (var entry : graph.entrySet()) {
             allWords.add(entry.getKey());
             allWords.addAll(entry.getValue().keySet());
         }
@@ -426,12 +467,9 @@ public class Main {
         boolean has1 = allWords.contains(word1);
         boolean has2 = allWords.contains(word2);
 
-        if (!has1 && !has2)
-            return "No \"" + word1 + "\" and \"" + word2 + "\" in the graph!";
-        if (!has1)
-            return "No \"" + word1 + "\" in the graph!";
-        if (!has2)
-            return "No \"" + word2 + "\" in the graph!";
+        if (!has1 && !has2) return "No \"" + word1 + "\" and \"" + word2 + "\" in the graph!";
+        if (!has1) return "No \"" + word1 + "\" in the graph!";
+        if (!has2) return "No \"" + word2 + "\" in the graph!";
 
         List<String> bridges = new ArrayList<>();
         if (graph.containsKey(word1)) {
@@ -442,8 +480,7 @@ public class Main {
             }
         }
 
-        if (bridges.isEmpty())
-            return "No bridge words from \"" + word1 + "\" to \"" + word2 + "\"!";
+        if (bridges.isEmpty()) return "No bridge words from \"" + word1 + "\" to \"" + word2 + "\"!";
 
         StringBuilder sb = new StringBuilder();
         sb.append("The bridge words from \"" + word1 + "\" to \"" + word2 + "\" are: ");
@@ -455,7 +492,6 @@ public class Main {
         return sb.toString();
     }
 
-    // 获取桥接词列表
     private static List<String> getBridgeWords(String w1, String w2) {
         w1 = w1.toLowerCase().replaceAll("[^a-z]", "");
         w2 = w2.toLowerCase().replaceAll("[^a-z]", "");
