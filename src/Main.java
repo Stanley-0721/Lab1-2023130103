@@ -140,6 +140,7 @@ public class Main {
         String start = word1.toLowerCase().replaceAll("[^a-z]", "");
         String end = word2.toLowerCase().replaceAll("[^a-z]", "");
 
+        // 收集所有节点
         Set<String> allWords = new HashSet<>();
         for (Map.Entry<String, Map<String, Integer>> entry : graph.entrySet()) {
             allWords.add(entry.getKey());
@@ -153,34 +154,43 @@ public class Main {
             return "❌ 单词 \"" + end + "\" 不存在！";
         }
         if (start.equals(end)) {
-            return "❌ 起点和终点不能相同！";
+            return "❌ 起点和终点相同，路径长度为0";
         }
 
+        // Dijkstra 初始化
         Map<String, Integer> dist = new HashMap<>();
         Map<String, String> prev = new HashMap<>();
-        Queue<String> q = new LinkedList<>();
+        PriorityQueue<Map.Entry<String, Integer>> pq =
+                new PriorityQueue<>(Comparator.comparingInt(Map.Entry::getValue));
 
-        for (String w : allWords) dist.put(w, -1);
+        for (String w : allWords) {
+            dist.put(w, Integer.MAX_VALUE);
+            prev.put(w, null);
+        }
         dist.put(start, 0);
-        q.add(start);
+        pq.add(new AbstractMap.SimpleEntry<>(start, 0));
 
-        while (!q.isEmpty()) {
-            String u = q.poll();
+        while (!pq.isEmpty()) {
+            String u = pq.poll().getKey();
             if (u.equals(end)) break;
+
             if (!graph.containsKey(u)) continue;
             for (String v : graph.get(u).keySet()) {
-                if (dist.get(v) == -1) {
-                    dist.put(v, dist.get(u) + 1);
+                int weight = graph.get(u).get(v); // 这里用真实权重！
+                if (dist.get(u) != Integer.MAX_VALUE && dist.get(u) + weight < dist.get(v)) {
+                    dist.put(v, dist.get(u) + weight);
                     prev.put(v, u);
-                    q.add(v);
+                    pq.add(new AbstractMap.SimpleEntry<>(v, dist.get(v)));
                 }
             }
         }
 
-        if (dist.get(end) == -1) {
+        // 不可达
+        if (dist.get(end) == Integer.MAX_VALUE) {
             return "📶 从 \"" + start + "\" 到 \"" + end + "\" 不可达！";
         }
 
+        // 还原路径
         List<String> path = new ArrayList<>();
         String cur = end;
         while (cur != null) {
@@ -189,8 +199,9 @@ public class Main {
         }
         Collections.reverse(path);
 
+        // 输出结果（显示总权重）
         StringBuilder sb = new StringBuilder();
-        sb.append("📶 最短路径（长度 ").append(path.size() - 1).append("）：");
+        sb.append("📶 加权最短路径（总权重 ").append(dist.get(end)).append("）：");
         for (int i = 0; i < path.size(); i++) {
             if (i > 0) sb.append(" → ");
             sb.append(path.get(i));
