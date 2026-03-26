@@ -68,7 +68,7 @@ public class Main {
         row1.add(btnRandomWalk);
         row1.add(btnStopWalk);
 
-        // 第二行：新文本输入框（单独一行，完美显示）
+        // 第二行：新文本输入框
         JPanel row2 = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
         JTextField newTextField = new JTextField(40);
         row2.add(new JLabel("新文本输入:"));
@@ -406,22 +406,39 @@ public class Main {
     }
 
     private static void displayGeneratedTextWithRed(String inputText) {
-        String[] words = inputText.toLowerCase().replaceAll("[^a-z\\s]", "").split("\\s+");
-        if (words.length <= 1) { appendResult(inputText + "\n", Color.BLACK); return; }
+        // 严格清洗单词，只保留字母和空格，转小写
+        String cleanText = inputText.toLowerCase().replaceAll("[^a-z\\s]", " ").replaceAll("\\s+", " ").trim();
+        String[] words = cleanText.split(" ");
+
+        if (words.length <= 1) {
+            appendResult(inputText + "\n", Color.BLACK);
+            return;
+        }
+
         try {
             Document doc = resultArea.getDocument();
+            // 先输出第一个单词
             doc.insertString(doc.getLength(), words[0], null);
+
             for (int i = 0; i < words.length - 1; i++) {
-                List<String> bridges = getBridgeWords(words[i], words[i+1]);
+                String w1 = words[i];
+                String w2 = words[i + 1];
+                List<String> bridges = getBridgeWords(w1, w2);
+
+                // 有桥接词：插入 空格 + 红色桥接词
                 if (!bridges.isEmpty()) {
-                    String b = bridges.get(random.nextInt(bridges.size()));
+                    String bridge = bridges.get(random.nextInt(bridges.size()));
                     doc.insertString(doc.getLength(), " ", null);
-                    doc.insertString(doc.getLength(), b, redAttr);
+                    doc.insertString(doc.getLength(), bridge, redAttr);
                 }
-                doc.insertString(doc.getLength(), " " + words[i+1], null);
+                // 插入下一个单词
+                doc.insertString(doc.getLength(), " " + w2, null);
             }
+
             doc.insertString(doc.getLength(), "\n", null);
-        } catch (Exception e) { appendResult("❌ 生成失败\n", Color.RED); }
+        } catch (Exception e) {
+            appendResult("❌ 生成失败\n", Color.RED);
+        }
     }
 
     private static List<String> getBridgeWords(String w1, String w2) {
