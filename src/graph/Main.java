@@ -385,7 +385,7 @@ public class Main {
   }
 
   // ===================== 加权最短路径 =====================
-  private static String calcShortestPath(String word1, String word2) {
+  public static String calcShortestPath(String word1, String word2) {
     String start = word1.toLowerCase().replaceAll("[^a-z]", "");
     String end = word2.toLowerCase().replaceAll("[^a-z]", "");
 
@@ -396,13 +396,13 @@ public class Main {
     }
 
     if (!allWords.contains(start)) {
-      return "❌ 不存在：" + start;
+      return "Error!不存在：" + start;
     }
     if (!allWords.contains(end)) {
-      return "❌ 不存在：" + end;
+      return "Error!不存在：" + end;
     }
     if (start.equals(end)) {
-      return "❌ 起点终点相同";
+      return "Error!起点终点相同";
     }
 
     Map<String, Integer> dist = new HashMap<>();
@@ -438,7 +438,7 @@ public class Main {
     }
 
     if (dist.get(end) == Integer.MAX_VALUE) {
-      return "📶 不可达";
+      return "Error!两词之间不可达";
     }
 
     List<String> path = new ArrayList<>();
@@ -447,7 +447,7 @@ public class Main {
     }
     Collections.reverse(path);
 
-    StringBuilder sb = new StringBuilder("📶 加权最短路径（权重" + dist.get(end) + "）：");
+    StringBuilder sb = new StringBuilder("加权最短路径（权重" + dist.get(end) + "）：");
     for (int i = 0; i < path.size(); i++) {
       if (i > 0) {
         sb.append(" → ");
@@ -640,20 +640,30 @@ public class Main {
       allNodes.addAll(entry.getValue().keySet());
     }
 
-    // 场景1：word1 或 word2 不在图中
-    if (!allNodes.contains(word1) || !allNodes.contains(word2)) {
+    // 场景1：word1 和 word2 都不在图中
+    if (!allNodes.contains(word1) && !allNodes.contains(word2)) {
       return String.format("No \"%s\" and \"%s\" in the graph!", word1, word2);
     }
 
-    // 场景2：获取桥接词
+    // 场景2：word1不在图中
+
+    if (!allNodes.contains(word1)) {
+      return String.format("No word1: \"%s\" in the graph!", word1);
+    }
+
+    // 场景3：word2不在图中
+    if (!allNodes.contains(word2)) {
+      return String.format("No word2: \"%s\" in the graph!", word2);
+    }
+
     List<String> bridgeWords = getBridgeWords(word1, word2);
 
-    // 场景3：无桥接词
+    // 场景4：无桥接词
     if (bridgeWords.isEmpty()) {
       return String.format("No bridge words from \"%s\" to \"%s\"!", word1, word2);
     }
 
-    // 场景4：有桥接词，按数量格式化输出
+    // 场景5：有桥接词，按数量格式化输出
     StringBuilder sb = new StringBuilder();
     if (bridgeWords.size() == 1) {
       // 单个桥接词
